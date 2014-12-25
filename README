@@ -1,3 +1,14 @@
+Hirediscpp is forked from Hiredispp with some changed:
+
+* Work with C++11
+* Remove all boost requirement
+* Modify code to work with libevent
+* I don't like exception, so I commented out some exception
+* Add .pri and .pro file for easy to add to QT project
+* Modify example to work with libevent
+
+Just open hirediscpp.pro with Qt Creator then enjoy !
+
 Introduction
 ------------
 

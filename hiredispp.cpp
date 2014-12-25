@@ -3,10 +3,13 @@
  */
 
 #include "hiredispp.h"
+#include "hiredispp_async.h"
 #include <ostream>
 #include <iterator>
-#include <boost/archive/detail/utf8_codecvt_facet.hpp>
+#include <bits/codecvt.h>
+#include <sstream>
 
+//#include <boost/archive/detail/utf8_codecvt_facet.hpp>
 namespace hiredispp
 {
     template<>
@@ -45,9 +48,14 @@ namespace hiredispp
                 const char* dataIt;
 
                 std::mbstate_t conversionState = std::mbstate_t();
-                result = std::use_facet<std::codecvt<wchar_t, char, std::mbstate_t> >(std::locale(std::locale::classic(),
-                        new boost::archive::detail::utf8_codecvt_facet)).in(conversionState, data, data + size, dataIt, buffer, buffer + bufferSize, bufferIt);
+#if 0
+//                result = std::use_facet<std::codecvt<wchar_t, char, std::mbstate_t> >(std::locale(std::locale::classic(),
+//                        new boost::archive::detail::utf8_codecvt_facet)).in(conversionState, data, data + size, dataIt, buffer, buffer + bufferSize, bufferIt);
+#else
 
+                auto &f =std::use_facet<std::codecvt<wchar_t, char, std::mbstate_t> >(std::locale());
+                result = f.in(conversionState, data, data + size, dataIt, buffer, buffer + bufferSize, bufferIt);
+#endif
                 string.append(buffer, bufferIt);
                 size -= (dataIt - data);
                 data = dataIt;
@@ -78,11 +86,18 @@ namespace hiredispp
             while (result == std::codecvt_base::partial)
             {
                 std::mbstate_t conversionState = std::mbstate_t();
+#if 0
                 result = std::use_facet<std::codecvt<wchar_t, char, std::mbstate_t> >
                     (std::locale(std::locale::classic(),
                                  new boost::archive::detail::utf8_codecvt_facet))
                     .out(conversionState, stringBegin, stringBegin+size, stringIt, buffer,
                          buffer+bufferSize, bufferIt);
+#else
+                auto &f = std::use_facet<std::codecvt<wchar_t, char, std::mbstate_t> >
+                    (std::locale(std::locale::classic()));
+                result = f.out(conversionState, stringBegin, stringBegin+size, stringIt, buffer,
+                         buffer+bufferSize, bufferIt);
+#endif
 
                 std::copy(buffer, bufferIt, out);
                 size -= (stringIt - stringBegin);

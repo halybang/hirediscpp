@@ -10,10 +10,12 @@
 #include <vector>
 #include <map>
 #include <stdexcept>
-#include <boost/lexical_cast.hpp>
-#include <boost/cstdint.hpp>
-#include <boost/optional.hpp>
+#include <cstdint>
 #include <hiredis/hiredis.h>
+
+// Remove all boost dependency
+//#include <experimental/optional>
+//#include <boost/lexical_cast>
 
 namespace hiredispp
 {
@@ -160,7 +162,7 @@ namespace hiredispp
             return getString();
         }
 
-        operator boost::int64_t() const
+        operator std::int64_t() const
         {
             checkError();
 
@@ -171,8 +173,8 @@ namespace hiredispp
 
             return T::get()->integer;
         }
-
-        operator boost::optional<boost::int64_t>() const
+#if 0
+        operator std::optional<std::int64_t>() const
         {
             checkError();
 
@@ -185,12 +187,12 @@ namespace hiredispp
 
             if (isNil())
             {
-                return boost::optional<boost::int64_t>();
+                return std::optional<std::int64_t>();
             }
 
-            return boost::optional<boost::int64_t>(T::get()->integer);
+            return std::optional<std::int64_t>(T::get()->integer);
         }
-
+#endif
         size_t size() const
         {
             checkError();
@@ -223,7 +225,7 @@ namespace hiredispp
         template <class V>
         void toValue(V& v)
         {
-            v = boost::lexical_cast<V>((std::basic_string<CharT>)(*this));
+            //v = boost::lexical_cast<V>((std::basic_string<CharT>)(*this));
         }
 
         template <class V>
@@ -231,7 +233,7 @@ namespace hiredispp
         {
             for (size_t i = 0; i < size(); ++i)
             {
-                v.push_back(boost::lexical_cast<V>((std::basic_string<CharT>)(*this)[i]));
+                //v.push_back(boost::lexical_cast<V>((std::basic_string<CharT>)(*this)[i]));
             }
         }
     };
@@ -383,7 +385,7 @@ namespace hiredispp
 
         template<class T> RedisCommandBase<CharT>& operator<<(const T& v)
         {
-            addPart(boost::lexical_cast<std::basic_string<CharT> >(v));
+            //addPart(boost::lexical_cast<std::basic_string<CharT> >(v));
             return *this;
         }
     };
@@ -549,7 +551,7 @@ namespace hiredispp
         bool exists(const std::basic_string<CharT>& key) const
         {
             beginExists(key);
-            return(((boost::int64_t)endCommand()) != 0);
+            return(((std::int64_t)endCommand()) != 0);
         }
 
         void beginSet(const std::basic_string<CharT>& key, const std::basic_string<CharT>& value) const
@@ -570,7 +572,7 @@ namespace hiredispp
             beginCommand(Command("SETNX") << key << value);
         }
 
-        boost::int64_t setnx(const std::basic_string<CharT>& key, const std::basic_string<CharT>& value) const
+        std::int64_t setnx(const std::basic_string<CharT>& key, const std::basic_string<CharT>& value) const
         {
             beginSetnx(key, value);
             return endCommand();
@@ -582,7 +584,7 @@ namespace hiredispp
             beginCommand(Command("INCR") << key);
         }
 
-        boost::int64_t incr(const std::basic_string<CharT>& key) const
+        std::int64_t incr(const std::basic_string<CharT>& key) const
         {
             beginIncr(key);
             return endCommand();
@@ -606,7 +608,7 @@ namespace hiredispp
             beginCommand(Command("DEL") << key);
         }
 
-        boost::int64_t del(const std::basic_string<CharT>& key) const
+        std::int64_t del(const std::basic_string<CharT>& key) const
         {
             beginDel(key);
             return endCommand();
@@ -618,7 +620,7 @@ namespace hiredispp
             beginCommand(Command("DEL") << keys);
         }
 
-        boost::int64_t del(const std::vector<std::basic_string<CharT> >& keys) const
+        std::int64_t del(const std::vector<std::basic_string<CharT> >& keys) const
         {
             beginDel(keys);
             return endCommand();
@@ -672,25 +674,25 @@ namespace hiredispp
             return endCommand();
         }
 
-        void beginLindex(const std::basic_string<CharT>& key, boost::int64_t index) const
+        void beginLindex(const std::basic_string<CharT>& key, std::int64_t index) const
         {
             connect();
             beginCommand(Command("LINDEX") << key << index);
         }
 
-        std::basic_string<CharT> lindex(const std::basic_string<CharT>& key, boost::int64_t index) const
+        std::basic_string<CharT> lindex(const std::basic_string<CharT>& key, std::int64_t index) const
         {
             beginLindex(key, index);
             return endCommand();
         }
 
-        void beginLrange(const std::basic_string<CharT>& key, boost::int64_t start, boost::int64_t end) const
+        void beginLrange(const std::basic_string<CharT>& key, std::int64_t start, std::int64_t end) const
         {
             connect();
             beginCommand(Command("LRANGE") << key << start << end);
         }
 
-        Reply lrange(const std::basic_string<CharT>& key, boost::int64_t start, boost::int64_t end) const
+        Reply lrange(const std::basic_string<CharT>& key, std::int64_t start, std::int64_t end) const
         {
             beginLrange(key, start, end);
             return endCommand();
@@ -702,7 +704,7 @@ namespace hiredispp
             beginCommand(Command("LLEN") << key);
         }
 
-        boost::int64_t llen(const std::basic_string<CharT>& key) const
+        std::int64_t llen(const std::basic_string<CharT>& key) const
         {
             beginLlen(key);
             return endCommand();
@@ -727,7 +729,7 @@ namespace hiredispp
             beginCommand(Command("HDEL") << key << field);
         }
 
-        boost::int64_t hdel(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field) const
+        std::int64_t hdel(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field) const
         {
             beginHdel(key, field);
             return endCommand();
@@ -739,7 +741,7 @@ namespace hiredispp
             beginCommand(Command("HSET") << key << field << value);
         }
 
-        boost::int64_t hset(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, const std::basic_string<CharT>& value) const
+        std::int64_t hset(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, const std::basic_string<CharT>& value) const
         {
             beginHset(key, field, value);
             return endCommand();
@@ -751,19 +753,19 @@ namespace hiredispp
             beginCommand(Command("HSETNX") << key << field << value);
         }
 
-        boost::int64_t hsetnx(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, const std::basic_string<CharT>& value) const
+        std::int64_t hsetnx(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, const std::basic_string<CharT>& value) const
         {
             beginHsetnx(key, field, value);
             return endCommand();
         }
 
-        void beginHincrby(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, boost::int64_t value) const
+        void beginHincrby(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, std::int64_t value) const
         {
             connect();
             beginCommand(Command("HINCRBY") << key << field << value);
         }
 
-        boost::int64_t hincrby(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, boost::int64_t value) const
+        std::int64_t hincrby(const std::basic_string<CharT>& key, const std::basic_string<CharT>& field, std::int64_t value) const
         {
             beginHincrby(key, field, value);
             return endCommand();
@@ -787,7 +789,7 @@ namespace hiredispp
             beginCommand(Command("SADD") << key << member);
         }
 
-        boost::int64_t sadd(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
+        std::int64_t sadd(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             beginSadd(key, member);
             return endCommand();
@@ -802,7 +804,7 @@ namespace hiredispp
         bool sismember(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             beginSismember(key, member);
-            return ((boost::int64_t)endCommand() == 1);
+            return ((std::int64_t)endCommand() == 1);
         }
 
         void beginSrem(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
@@ -811,7 +813,7 @@ namespace hiredispp
             beginCommand(Command("SREM") << key << member);
         }
 
-        boost::int64_t srem(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
+        std::int64_t srem(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             beginSrem(key, member);
             return endCommand();
@@ -883,7 +885,7 @@ namespace hiredispp
             beginCommand(Command("SCARD") << key);
         }
 
-        boost::int64_t scard(const std::basic_string<CharT>& key) const
+        std::int64_t scard(const std::basic_string<CharT>& key) const
         {
             beginScard(key);
             return endCommand();
@@ -895,7 +897,7 @@ namespace hiredispp
             beginCommand(Command("ZADD") << key << score << member);
         }
 
-        boost::int64_t zadd(const std::basic_string<CharT>& key, double score, const std::basic_string<CharT>& member) const
+        std::int64_t zadd(const std::basic_string<CharT>& key, double score, const std::basic_string<CharT>& member) const
         {
             beginZadd(key, score, member);
             return endCommand();
@@ -907,7 +909,7 @@ namespace hiredispp
             beginCommand(Command("ZREM") << key << member);
         }
 
-        boost::int64_t zrem(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
+        std::int64_t zrem(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             beginZrem(key, member);
             return endCommand();
@@ -918,44 +920,44 @@ namespace hiredispp
             connect();
             beginCommand(Command("ZRANK") << key << member);
         }
-
-        boost::optional<boost::int64_t> zrank(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
+#if 0
+        std::optional<std::int64_t> zrank(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             beginZrank(key, member);
             return endCommand();
         }
-
+#endif
         void beginZrevrank(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             connect();
             beginCommand(Command("ZREVRANK") << key << member);
         }
-
-        boost::optional<boost::int64_t> zrevrank(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
+#if 0
+        std::optional<std::int64_t> zrevrank(const std::basic_string<CharT>& key, const std::basic_string<CharT>& member) const
         {
             beginZrevrank(key, member);
             return endCommand();
         }
-
-        void beginZrange(const std::basic_string<CharT>& key, boost::int64_t start, boost::int64_t end) const
+#endif
+        void beginZrange(const std::basic_string<CharT>& key, std::int64_t start, std::int64_t end) const
         {
             connect();
             beginCommand(Command("ZRANGE") << key << start << end);
         }
 
-        Reply zrange(const std::basic_string<CharT>& key, boost::int64_t start, boost::int64_t end) const
+        Reply zrange(const std::basic_string<CharT>& key, std::int64_t start, std::int64_t end) const
         {
             beginZrange(key, start, end);
             return endCommand();
         }
 
-        void beginZrevrange(const std::basic_string<CharT>& key, boost::int64_t start, boost::int64_t end) const
+        void beginZrevrange(const std::basic_string<CharT>& key, std::int64_t start, std::int64_t end) const
         {
             connect();
             beginCommand(Command("ZREVRANGE") << key << start << end);
         }
 
-        Reply zrevrange(const std::basic_string<CharT>& key, boost::int64_t start, boost::int64_t end) const
+        Reply zrevrange(const std::basic_string<CharT>& key, std::int64_t start, std::int64_t end) const
         {
             beginZrevrange(key, start, end);
             return endCommand();
@@ -991,7 +993,7 @@ namespace hiredispp
             beginCommand(Command("ZCARD") << key);
         }
 
-        boost::int64_t zcard(const std::basic_string<CharT>& key) const
+        std::int64_t zcard(const std::basic_string<CharT>& key) const
         {
             beginZcard()(key);
             return endCommand();

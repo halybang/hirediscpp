@@ -8,193 +8,167 @@
 #include <signal.h>
 #include <string>
 #include <iostream>
+#include <sys/types.h>
+#if _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    //#include <err.h>
+#endif
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <signal.h>
+
+#include <event2/event.h>
 #include <hiredis/async.h>
+#include "hiredispp.h"
+#include "hiredispp_async.h"
 
-#include <hiredispp/hiredispp.h>
-#include <hiredispp/hiredispp_async.h>
-
-#include <boost/bind.hpp>
-#include <boost/random.hpp>
-#include <boost/program_options.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/accumulators/accumulators.hpp>
-#include <boost/accumulators/statistics.hpp>
 
 using namespace std;
 using namespace hiredispp;
-using namespace boost::posix_time;
-using namespace boost::accumulators;
-
-namespace po = boost::program_options;
 
 class Main
 {
-    typedef accumulator_set<double, stats <tag::median(with_p_square_quantile),
-                                           tag::skewness, // add mean, moment<2>, moment<3>
-                                           tag::count, tag::min, tag::max, tag::mean 
-                                           > > AccuType;
 
 public:
-    Main(const string& host, int port, int total, int batch, const string& key, bool is_set, int vsize) :
-        _host(host), _port(port), _connected(false),
-        _ac(_host, _port), _counter(0), _done(0), _total(total),
-        _batch(batch), _key(key), _set(is_set), _vsize(vsize),
-        _dist(1, (vsize >0 ? vsize : 1)), _rand(_rng, _dist)
-    {
-        connect();
-        _start=microsec_clock::universal_time();
-        _cstart=_start;
-    }
+    Main() {}
 
     ~Main()
     {
         if (_connected) {
             _ac.disconnect();
         }
-        boost::posix_time::ptime stop=microsec_clock::universal_time();
-        cout << "FINAL:" << endl;
-        print_stats(cout, _start, stop, _lat) << endl;
     }
 
-    ostream& print_stats(ostream& out,
-                         boost::posix_time::ptime start,
-                         boost::posix_time::ptime stop,
-                         const AccuType& acc) const
+    // This callback function useful for un-interrupt command like: SUBCRIBE or MONITOR
+    void onReplyDefault(RedisConnectionAsync& ac, redisReply *reply, void* privdata )
     {
-        long long int per = time_period(start, stop).length().total_microseconds();
-        return out
-            << extract_result< tag::count >(acc) << " "
-            << extract_result< tag::min >(acc) << " "
-            << mean(acc) << " "
-            << extract_result< tag::max >(acc) << " "
-            << extract_result< tag::median >(acc) << " "
-            << sqrt(extract_result< tag::moment<2> > (acc)) << " "
-            << extract_result< tag::skewness > (acc)
-            << "\ttime: "<< per
-            << "\tRPS "  << 1e6 * extract_result< tag::count >(acc) / per;
-    }
-
-    void connect()
-    {
-        _ac.connect(boost::bind(&Main::onConnected, this, _1),
-                    boost::bind(&Main::onDisconnected, this, _1));
-    }
-
-    void setDone(RedisConnectionAsync& ac, Redis::Element *reply, int id, boost::posix_time::ptime start)
-    {
-        boost::posix_time::ptime stop=microsec_clock::universal_time();
-        try {
-            if (reply) {
-                ++_done;
-                reply->checkError();
-            }
-            else {
-                throw RedisException(std::string("disconnected"));
-            }
-            
-            _lat(time_period(start, stop).length().total_microseconds());
-            _cur(time_period(start, stop).length().total_microseconds());
-
-            if (_done==_counter && (_batch!=1 || (_done % (_total/10)==0))) {
-                cout << "exec.done "<<_counter
-                     <<(reply ? " REPLY " : " NULL ");
-                print_stats(cout, _cstart, stop, _cur) << endl;
-                _cstart = stop;
-                _cur=AccuType();
-            }
-            
-            if (_done==_counter) {
-                executeNext();
+        if (reply == nullptr) return;
+        switch(reply->type) {
+        case REDIS_REPLY_STRING:
+            cout << "Redis onReplyDefault:string:" << reply->str <<endl;
+            break;
+        case REDIS_REPLY_INTEGER:
+            cout << "Redis onReplyDefault:integer:" << reply->integer <<endl;
+            break;
+        case REDIS_REPLY_ARRAY:
+        {
+            for (int i = 0; i < reply->elements; i++) {
+                redisReply *rep = reply->element[i];
+                if (rep->type == REDIS_REPLY_STRING)  {
+                    cout << "Redis onReplyDefault:array:string" << i << ":"  << rep->str <<endl;
+                } else if (rep->type == REDIS_REPLY_INTEGER) {
+                    cout << "Redis onReplyDefault:array:integer" << i << ":"  << rep->integer <<endl;
+                }
             }
         }
-        catch (const RedisException& ex) {
-            cout<<"Main::execCmd exception "<<ex.what()<<endl;
-            if (_connected) 
-                _ac.disconnect();
+        break;
         }
     }
 
-    void onConnected(boost::shared_ptr<RedisException> &ex)
+    // This callback function useful for use only one response. Do not use for command like: SUBCRIBE or MONITOR, or prog will crash
+    void onReply(hiredispp::RedisConnectionAsync &rc, redisReply *reply)
     {
-        cout << "Main::onConnected: " 
-             << (ex ? ex->what() : "OK")
-             << endl;
+        if (reply == nullptr) return;
+        switch(reply->type) {
+        case REDIS_REPLY_STRING:
+            cout << "Redis onReply:string:" << reply->str <<endl;
+            break;
+        case REDIS_REPLY_INTEGER:
+            cout << "Redis onReply:integer:" << reply->integer <<endl;
+            break;
+        case REDIS_REPLY_ARRAY:
+        {
+            for (int i = 0; i < reply->elements; i++) {
+                redisReply *rep = reply->element[i];
+                if (rep->type == REDIS_REPLY_STRING)  {
+                    cout << "Redis onReply:array:" << i << ":string:"  << rep->str <<endl;
+                } else if (rep->type == REDIS_REPLY_INTEGER) {
+                    cout << "Redis onReply:array:" << i << ":integer:"  << rep->integer <<endl;
+                }
+            }
+        }
+        break;
+        }
+    }
 
+    void onConnected(const RedisConnectionAsync& ac, std::shared_ptr<RedisException> &ex)
+    {
         if (ex==NULL) {
-            _connected=true;
-            executeNext();
-        }
+            cout << "Redis onConnected: List ALL KEYS" <<endl;
+            _ac.execAsyncCommand(std::bind(&Main::onReply, this, std::placeholders::_1, std::placeholders::_2),"KEYS *");
+            _ac.execAsyncCommandDefault(nullptr, "SUBSCRIBE MYCHANNEL");
+        } else
+            cout << "Redis connect failured" <<endl;
     }
 
-    void onDisconnected(boost::shared_ptr<RedisException> &ex)
+    void onDisconnected(const RedisConnectionAsync& ac, std::shared_ptr<RedisException> &ex)
     {
-        cout << "Main::onDisconnected: " 
+        cout << "Redis onDisconnected: "
              << (ex ? ex->what() : "OK") 
              << endl;
         
         _connected=false;
     }
 
-    void executeNext()
-    {
-        if (_counter<_total) {
-            try {
-                for (int i=0; i<_batch && _counter<_total; ++i) {
-                    boost::posix_time::ptime start=microsec_clock::universal_time();
-                    RedisCommandBase<char> cmd;
-                    if (_set) {
-                        cmd<<"set"
-                           <<(_key+boost::lexical_cast<string> (_counter));
-                        if (_vsize==0) {
-                            cmd<<((string)"myvalue" + boost::lexical_cast<string> (_counter));
-                        }
-                        else {
-                            cmd<<string(_rand(),'v');
-                        }
-                    }
-                    else {
-                        cmd<<"get"
-                           <<(_key+boost::lexical_cast<string> (_counter));
-                    }
-                    _ac.execAsyncCommand(cmd, boost::bind(&Main::setDone, this, _1, _2, _counter, start));
-                    ++_counter;
-                }
-            }
-            catch (const hiredispp::RedisException& ex) {
-                cout<<ex.what()<<endl;
-                _ac.disconnect();
-            }
-        }
-        else {
-            if (_done==_total) {
-                _ac.disconnect();
-            }
-        }
-    }
 
-    string _host;
-    int    _port;
+    string _host = "127.0.0.1";
+    int    _port = 6379;
     bool   _connected;
     int    _counter;
     int    _done;
 
-    boost::posix_time::ptime _start;
-    boost::posix_time::ptime _cstart;
-
-    const string _key;
-    const int _batch;
-    const int _total;
-    const int _vsize;
-    const bool _set;
-
-    boost::mt19937        _rng;
-    boost::uniform_int<> _dist;
-    boost::variate_generator<boost::mt19937&, boost::uniform_int<> > _rand;
-
     RedisConnectionAsync _ac;
+    static void on_event(int fd, short ev, void *arg)
+    {
+        Main *srv = (Main *)arg;
+        if (!srv) return;
+        if (ev & EV_TIMEOUT) {
+            srv->onTimeOut();
+        }
+        if (ev & EV_SIGNAL) {
+        }
+    }
 
-    AccuType _cur;
-    AccuType _lat;
+    void onTimeOut()
+    {
+        if(_ac.getState() == hiredispp::redisAsyncState::redisAsyncStateDisconnected) {
+            cout << "Redis trying connect to " << _host << ":" << _port <<endl;
+            _ac.connect(std::bind(&Main::onConnected, this, std::placeholders::_1, std::placeholders::_2),
+                              std::bind(&Main::onDisconnected, this, std::placeholders::_1, std::placeholders::_2),
+                              std::bind(&Main::onReplyDefault, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
+                              );
+        }
+    }
+
+    void run()
+    {
+        struct event_base *evbase;
+        evbase = event_base_new();
+        struct timeval tvi;
+        tvi.tv_sec = 2;
+        tvi.tv_usec = 0;
+
+        struct event* ev_timer = event_new(evbase, -1, EV_TIMEOUT | EV_PERSIST, on_event, reinterpret_cast<void *>(this));
+        if (event_add(ev_timer, &tvi) == -1) {
+            return ;
+        }
+        _ac.setHost(_host, _port);
+        _ac.setLoopBase(evbase);
+
+        /* Start the event loop. */
+        event_base_dispatch(evbase);
+    }
 };
 
 namespace std {
@@ -203,41 +177,24 @@ namespace std {
     }
 }
 
+/*
+* After run program, open redis-cli and repeat enter command:
+* PUBLISH MYCHANNEL DATA_NEED_TO_PUB_TO_MYCHANNEL
+* then see result in example console.
+*/
+
 int main(int argc, char** argv)
 {
-    string host;
-    string key;
-    int    port;
-    int    count;
-    int    batch;
-    int    vsize;
-    bool   is_set;
 
-    po::options_description desc("options");
+#if _WIN32
+    WSADATA wsa_data;
+    WSAStartup(0x0201, &wsa_data);
+#endif
 
-    desc.add_options()
-        ("help", "produce this help message")
-        ("host", po::value<string>(&host)->default_value("localhost"), "host")
-        ("port", po::value<int>(&port)->default_value(6379), "port")
-        ("count", po::value<int>(&count)->default_value(1000), "number of requests")
-        ("batch", po::value<int>(&batch)->default_value(100), "batch size")
-        ("is_set", po::value<bool>(&is_set)->default_value(true), "set/get command")
-        ("key", po::value<string>(&key)->default_value("mykey"), "key prefix")
-        ("value_size", po::value<int>(&vsize)->default_value(0), "maximum value size, 0 - fixed.")
-        ;
+#if HIREDISPP_USE_LIBEVENT
+    Main main;
+    main.run();
+#endif
 
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-    po::notify(vm);
-    
-    if (vm.count("help")) {
-        cout << desc << endl;
-        return 0;
-    }
-
-    signal(SIGPIPE, SIG_IGN);
-    ev_default_loop(0);
-    Main main(host, port, count, batch, key, is_set, vsize);
-    ev_loop(EV_DEFAULT, 0);
     return 0;
 }
